@@ -78,29 +78,14 @@ All signals are cross-sectionally z-scored before combination.
 
 ## Results
 
-> *Note: Results below are representative from the 2015–2024 backtest on 80 S&P 500 tickers. Run `python run_research.py` for full-universe results.*
+**Status:** no verified results are published. An earlier version of this section listed approximate IC and Sharpe figures that were not produced by a recorded run, so they have been removed. Run `python run_research.py` (add `--fast` for 80 tickers) and the tables are written to `outputs/` (`ic_icir_summary.csv`, `fama_macbeth_results.csv`, and the portfolio performance summary).
 
-### Factor IC Summary (20-Day Forward Return)
+### Caveats that apply to any result
 
-| Factor | Mean IC | ICIR | IC > 0 (%) |
-|---|---|---|---|
-| Momentum | ~0.025 | ~0.35 | ~57% |
-| Value | ~0.015 | ~0.22 | ~54% |
-| Quality | ~0.020 | ~0.30 | ~56% |
-| Low Volatility | ~0.018 | ~0.28 | ~55% |
-| Reversal | ~0.030 | ~0.40 | ~58% |
-| Size | ~0.012 | ~0.18 | ~53% |
-
-### Portfolio Performance (Net of 5bps TC)
-
-| Metric | Value |
-|---|---|
-| Annualized Return | ~8–12% |
-| Annualized Volatility | ~6–8% |
-| Sharpe Ratio | ~1.1–1.5 |
-| Max Drawdown | ~−8% to −12% |
-| Annual Turnover | ~6–8× |
-| Deflated Sharpe Ratio | ~0.85–0.95 |
+- **Value and Quality use simulated fundamentals.** `run_research.py` calls `load_fundamentals_simulated`, which generates random log-normal book value, net income and equity. The Value (book-to-market) and Quality (ROE) factors are therefore noise and say nothing about real stocks until real fundamentals are supplied. Momentum, Reversal, Low Volatility and Size use real prices and market cap.
+- **Survivorship bias.** The universe is a static list of current S&P 500 members.
+- **Execution timing.** Signals use the close on the rebalance date and returns start the next day, i.e. a same-close fill. This is optimistic.
+- **Multiple testing.** Six factors and several variants were examined; the Deflated Sharpe Ratio is reported for that reason, but it does not remove survivorship bias.
 
 ---
 
@@ -133,15 +118,6 @@ jupyter notebook notebooks/factor_research_summary.ipynb
 | `outputs/factor_correlation.csv` | 6×6 factor correlation matrix |
 | `outputs/portfolio_performance.csv` | Full performance metrics |
 | `notebooks/factor_research_summary.ipynb` | Interactive end-to-end walkthrough |
-
----
-
-## Resume Bullets
-
-- **Built a production-quality cross-sectional factor research framework** in Python covering 6 equity factors (Momentum, Value, Quality, Low Vol, Reversal, Size) across the S&P 500 universe, achieving factor ICs of 0.015–0.030 with ICI Rs of 0.2–0.4.
-- **Implemented rigorous quantitative analytics** including rolling Spearman IC, factor decay analysis across 6 horizons, Fama-MacBeth two-pass regression with Newey-West standard errors, and 6×6 factor correlation monitoring for crowding detection.
-- **Constructed a dollar-neutral long-short portfolio** using Equal Risk Contribution (ERC) optimization across all 6 factors, achieving a Sharpe ratio of ~1.2 after 5bps transaction costs on monthly rebalancing.
-- **Applied Deflated Sharpe Ratio (Bailey & Lopez de Prado 2014)** to correct for selection bias and non-normality across multiple strategy trials, providing statistically sound out-of-sample performance assessment.
 
 ---
 
