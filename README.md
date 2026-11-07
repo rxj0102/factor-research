@@ -1,5 +1,7 @@
 # Cross-Sectional Factor Research Framework
 
+[![CI](https://github.com/rxj0102/factor-research/actions/workflows/ci.yml/badge.svg)](https://github.com/rxj0102/factor-research/actions/workflows/ci.yml)
+
 A production-quality quantitative research framework for systematic factor investing on US equities (S&P 500 universe). Implements six canonical factors, rigorous analytics (IC, ICIR, Fama-MacBeth, factor decay, quintile analysis), and a multi-factor long-short portfolio with ERC weighting.
 
 ---
