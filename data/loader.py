@@ -72,6 +72,8 @@ def load_prices(
     prices = prices.sort_index()
     # Drop tickers with >50% missing
     prices = prices.loc[:, prices.isna().mean() < 0.5]
+    if prices is None or prices.empty:
+        raise RuntimeError("Price download returned no data (rate-limited or offline); aborting.")
     prices = prices.ffill().dropna(how="all")
 
     if use_cache:
