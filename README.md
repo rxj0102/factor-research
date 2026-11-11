@@ -61,7 +61,7 @@ All signals are cross-sectionally z-scored before combination.
 ### Analytics
 
 - **IC / ICIR**: Spearman rank correlation between factor signal and forward returns (1d, 5d, 20d). Rolling 252-day window.
-- **Factor Decay**: Mean IC at forward lags {1, 2, 3, 5, 10, 20} days — measures signal persistence.
+- **Factor Decay**: Mean IC at forward lags {1, 2, 3, 5, 10, 20} days - measures signal persistence.
 - **Quintile Analysis**: Monthly ranking into 5 equal buckets; equal-weighted 20d forward returns; Q5-Q1 spread.
 - **Fama-MacBeth**: Monthly cross-sectional OLS of returns on standardized factor exposures; Newey-West t-statistics with 4 lags.
 - **Factor Correlation**: Average monthly Spearman correlation matrix; |corr| > 0.6 flagged as crowded.
