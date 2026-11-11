@@ -29,7 +29,8 @@ def _composite_signal(
             signals.append(pd.Series(dtype=float))
             continue
         s = fdf.loc[date].dropna()
-        z = (s - s.mean()) / s.std().replace(0, np.nan)
+        sd = s.std()
+        z = (s - s.mean()) / sd if sd > 0 else s * np.nan
         signals.append(z)
 
     combined = pd.concat(
