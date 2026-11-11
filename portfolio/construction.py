@@ -29,7 +29,8 @@ def _composite_signal(
             signals.append(pd.Series(dtype=float))
             continue
         s = fdf.loc[date].dropna()
-        z = (s - s.mean()) / s.std().replace(0, np.nan)
+        sd = s.std()  # a scalar; the old .replace(0, nan) call on it raised, so this function never ran
+        z = (s - s.mean()) / sd if sd > 0 else s * np.nan
         signals.append(z)
 
     combined = pd.concat(
@@ -38,35 +39,55 @@ def _composite_signal(
     return combined
 
 
-def _erc_factor_weights(factor_dict: dict, lookback_dates: list) -> np.ndarray:
-    """Estimate ERC weights from factor signal return correlations."""
-    factor_names = list(factor_dict.keys())
-    n = len(factor_names)
-    # Use identity covariance as fallback (equal weights)
-    sig_rets = {}
+def _factor_spread_returns(factor_dict: dict, prices: pd.DataFrame, dates: list) -> pd.DataFrame:
+    """Top-minus-bottom quintile return of each factor from dates[k] to dates[k+1].
+
+    Each return is realised by dates[k+1], so using these up to the current
+    rebalance date is causal.
+    """
+    out = {}
     for name, fdf in factor_dict.items():
-        avail = [d for d in lookback_dates if d in fdf.index]
-        if not avail:
-            continue
-        # Proxy: mean signal across universe (simple series)
-        sig_rets[name] = pd.Series(
-            [fdf.loc[d].mean() for d in avail], index=avail
-        )
+        vals = {}
+        for a, b in zip(dates[:-1], dates[1:]):
+            if a not in fdf.index:
+                continue
+            sig = fdf.loc[a].dropna()
+            r = (prices.loc[b] / prices.loc[a] - 1).reindex(sig.index).dropna()
+            sig = sig.reindex(r.index)
+            if len(sig) < 50:
+                continue
+            k = max(1, int(len(sig) * 0.2))
+            vals[b] = r[sig.nlargest(k).index].mean() - r[sig.nsmallest(k).index].mean()
+        out[name] = pd.Series(vals)
+    return pd.DataFrame(out)
 
-    if len(sig_rets) < 2:
+
+def _erc_factor_weights(factor_dict: dict, lookback_dates: list, prices: pd.DataFrame) -> np.ndarray:
+    """ERC weights from the covariance of trailing factor long-short returns.
+
+    An earlier version used the covariance of each factor's cross-sectional
+    mean signal level, which is not a return and says nothing about risk.
+    """
+    n = len(factor_dict)
+    if len(lookback_dates) < 7:
         return np.ones(n) / n
-
-    sig_df = pd.DataFrame(sig_rets).dropna()
-    if len(sig_df) < 5:
+    rets = _factor_spread_returns(factor_dict, prices, list(lookback_dates)).dropna()
+    if len(rets) < 6:
         return np.ones(n) / n
-
-    # Reorder to match factor_names
-    sig_df = sig_df.reindex(columns=factor_names).fillna(0)
-    cov = sig_df.cov().values + np.eye(n) * 1e-6  # regularise
+    rets = rets.reindex(columns=list(factor_dict.keys()))
+    cov = rets.cov().values + np.eye(n) * 1e-8  # regularise
     try:
         return equal_risk_contribution_weights(cov)
     except Exception:
         return np.ones(n) / n
+
+
+def month_end_trading_days(index: pd.DatetimeIndex) -> list:
+    """Last trading day of each month. Calendar month-ends that fall on a
+    weekend or holiday are not in the price index, and filtering on them
+    silently skipped those months."""
+    s = index.to_series()
+    return list(s.groupby(index.to_period("M")).max())
 
 
 def build_long_short_portfolio(
@@ -98,8 +119,9 @@ def build_long_short_portfolio(
         Columns: date, gross_ret, net_ret, long_weight, short_weight, turnover.
     """
     daily_ret = prices.pct_change()
-    rebal_dates = prices.resample(rebal_freq).last().index
-    rebal_dates = [d for d in rebal_dates if d in prices.index]
+    if rebal_freq != "ME":
+        raise ValueError("only month-end rebalancing is supported")
+    rebal_dates = month_end_trading_days(prices.index)
 
     prev_long_w = pd.Series(dtype=float)
     prev_short_w = pd.Series(dtype=float)
@@ -107,8 +129,8 @@ def build_long_short_portfolio(
 
     for i, d in enumerate(rebal_dates):
         # ERC weights: use previous 12 rebal dates as lookback
-        lookback = rebal_dates[max(0, i - 12) : i]
-        erc_w = _erc_factor_weights(factor_dict, list(lookback))
+        lookback = rebal_dates[max(0, i - 12) : i + 1]  # returns realised up to d
+        erc_w = _erc_factor_weights(factor_dict, list(lookback), prices)
 
         composite = _composite_signal(factor_dict, erc_w, d)
         if composite.empty or composite.dropna().shape[0] < 20:
@@ -144,8 +166,10 @@ def build_long_short_portfolio(
         gross_daily = (long_ret - short_ret) / 2  # dollar-neutral scaling
 
         net_daily = gross_daily.copy()
-        # Apply TC on first day of period
-        net_daily.iloc[0] -= tc_bps * turnover * 2  # two-way
+        # Book is scaled to 0.5 long and 0.5 short, so traded notional per unit
+        # capital is sum|dw| / 2 = turnover; both buys and sells are already in
+        # it. The earlier version multiplied by 2 again.
+        net_daily.iloc[0] -= tc_bps * turnover
 
         for pd_date in period_dates:
             records.append(

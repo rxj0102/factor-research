@@ -27,7 +27,10 @@ def fama_macbeth_regression(
     factor_dict : dict
         Keys = factor names, values = signal DataFrames (dates × tickers).
     returns_1m : pd.DataFrame
-        Monthly stock returns (dates × tickers).
+        Monthly stock returns (dates × tickers), where the row at month-end t
+        is the return over month t (as from prices.resample('ME').last().pct_change()).
+        The signal observed at month-end t is regressed on the return over the
+        following month, t to t+1.
     newey_west_lags : int
         Lags for Newey-West HAC covariance.
 
@@ -39,6 +42,12 @@ def fama_macbeth_regression(
         mean_coef, t_stat, p_value, significant per factor.
     """
     factor_names = list(factor_dict.keys())
+
+    # Predictive alignment: signal at month-end t against the return realised
+    # over the next month. Regressing on returns_1m.loc[t] (the month ending at
+    # t) would let signals built from that month's prices, such as 5-day
+    # reversal, explain their own inputs.
+    returns_1m = returns_1m.shift(-1)
 
     # Get common rebalancing dates
     dates = returns_1m.index
