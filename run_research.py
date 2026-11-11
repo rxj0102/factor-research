@@ -170,12 +170,22 @@ def main():
     # 7. Portfolio construction & performance
     # ------------------------------------------------------------------ #
     logger.info("Step 7/7 — Building long-short portfolio …")
-    port_df = build_long_short_portfolio(factor_dict, prices)
+    port_df = build_long_short_portfolio(factor_dict, prices)  # exec_lag=1
     perf = portfolio_performance(port_df, ret_col="net_ret")
 
     perf_df = pd.DataFrame([perf])
     perf_df.to_csv(OUTPUTS / "portfolio_performance.csv", index=False)
     logger.info("  Saved portfolio_performance.csv")
+
+    # Execution-lag sensitivity: same-close fill (0) vs next-close fill (1)
+    lag_rows = []
+    for lag in (0, 1):
+        p_lag = portfolio_performance(
+            build_long_short_portfolio(factor_dict, prices, exec_lag=lag), ret_col="net_ret"
+        )
+        lag_rows.append({"exec_lag": lag, **p_lag})
+    pd.DataFrame(lag_rows).to_csv(OUTPUTS / "exec_lag_comparison.csv", index=False)
+    logger.info("  Saved exec_lag_comparison.csv")
 
     # Print summary
     logger.info("\n" + "=" * 55)

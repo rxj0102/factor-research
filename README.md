@@ -61,7 +61,7 @@ All signals are cross-sectionally z-scored before combination.
 ### Analytics
 
 - **IC / ICIR**: Spearman rank correlation between factor signal and forward returns (1d, 5d, 20d). Rolling 252-day window.
-- **Factor Decay**: Mean IC at forward lags {1, 2, 3, 5, 10, 20} days — measures signal persistence.
+- **Factor Decay**: Mean IC at forward lags {1, 2, 3, 5, 10, 20} days - measures signal persistence.
 - **Quintile Analysis**: Monthly ranking into 5 equal buckets; equal-weighted 20d forward returns; Q5-Q1 spread.
 - **Fama-MacBeth**: Monthly cross-sectional OLS of returns on standardized factor exposures; Newey-West t-statistics with 4 lags.
 - **Factor Correlation**: Average monthly Spearman correlation matrix; |corr| > 0.6 flagged as crowded.
@@ -84,7 +84,7 @@ All signals are cross-sectionally z-scored before combination.
 
 - **Value and Quality use simulated fundamentals.** `run_research.py` calls `load_fundamentals_simulated`, which generates random log-normal book value, net income and equity. The Value (book-to-market) and Quality (ROE) factors are therefore noise and say nothing about real stocks until real fundamentals are supplied. Momentum, Reversal, Low Volatility and Size use real prices and market cap.
 - **Survivorship bias.** The universe is a static list of current S&P 500 members.
-- **Execution timing.** Signals use the close on the rebalance date and returns start the next day, i.e. a same-close fill. This is optimistic.
+- **Execution timing.** Portfolio weights set at the rebalance close are now filled at the next close (`exec_lag=1` in `build_long_short_portfolio`), so the first return earned is two trading days after the signal. `exec_lag=0` reproduces the old same-close fill; `run_research.py` writes both to `outputs/exec_lag_comparison.csv`.
 - **Multiple testing.** Six factors and several variants were examined; the Deflated Sharpe Ratio is reported for that reason, but it does not remove survivorship bias.
 
 ---

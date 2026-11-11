@@ -29,7 +29,8 @@ def _composite_signal(
             signals.append(pd.Series(dtype=float))
             continue
         s = fdf.loc[date].dropna()
-        z = (s - s.mean()) / s.std().replace(0, np.nan)
+        sd = s.std()
+        z = (s - s.mean()) / sd if sd > 0 else s * np.nan
         signals.append(z)
 
     combined = pd.concat(
@@ -75,6 +76,7 @@ def build_long_short_portfolio(
     quintile_cutoff: float = 0.2,
     rebal_freq: str = "ME",
     tc_bps: float = TC_BPS,
+    exec_lag: int = 1,
 ) -> pd.DataFrame:
     """
     Build ERC-combined long-short portfolio.
@@ -91,6 +93,11 @@ def build_long_short_portfolio(
         Pandas resample offset alias.
     tc_bps : float
         One-way transaction cost per unit traded (5bps = 5e-4).
+    exec_lag : int
+        Trading days between the rebalance close that fixes the weights and
+        the close at which they are filled. 1 (default) fills at the next
+        close, so the first return earned is two days after the signal.
+        0 reproduces the original same-close fill, which is optimistic.
 
     Returns
     -------
@@ -131,9 +138,16 @@ def build_long_short_portfolio(
         prev = prev_long_w.reindex(all_tickers, fill_value=0) + prev_short_w.reindex(all_tickers, fill_value=0)
         turnover = (cur - prev).abs().sum() / 2
 
-        # Compute return for the period until next rebal
-        next_d = rebal_dates[i + 1] if i + 1 < len(rebal_dates) else prices.index[-1]
-        period_dates = prices.index[(prices.index > d) & (prices.index <= next_d)]
+        # Hold from the fill close of this rebalance to the fill close of
+        # the next one. The fill is exec_lag trading days after the signal.
+        pos_d = prices.index.get_loc(d)
+        fill = prices.index[min(pos_d + exec_lag, len(prices.index) - 1)]
+        if i + 1 < len(rebal_dates):
+            pos_n = prices.index.get_loc(rebal_dates[i + 1])
+            next_fill = prices.index[min(pos_n + exec_lag, len(prices.index) - 1)]
+        else:
+            next_fill = prices.index[-1]
+        period_dates = prices.index[(prices.index > fill) & (prices.index <= next_fill)]
 
         if len(period_dates) == 0:
             continue
