@@ -41,7 +41,23 @@ def block() -> str:
             f"{fm.loc[f, 'mean_coef']:+.4f} | {fm.loc[f, 't_stat']:+.2f} |"
         )
     old = pd.read_csv(R / "fama_macbeth_old_alignment.csv").set_index("factor")
+    perf = json.loads((R / "composite_performance.json").read_text())
+    n, g = perf["net"], perf["gross"]
+    cov = info["fundamental_coverage"]
     lines += [
+        "",
+        "Composite long-short portfolio (ERC-weighted across all six factors, top and bottom quintile, monthly):",
+        "",
+        "| | Gross | Net of 5 bps costs |",
+        "|---|---|---|",
+        f"| Annual return | {g['annualized_return']:+.2%} | {n['annualized_return']:+.2%} |",
+        f"| Annual volatility | {g['annualized_volatility']:.2%} | {n['annualized_volatility']:.2%} |",
+        f"| Sharpe ratio | {g['sharpe_ratio']:.2f} | {n['sharpe_ratio']:.2f} |",
+        f"| Max drawdown | {g['max_drawdown']:.2%} | {n['max_drawdown']:.2%} |",
+        f"| Deflated Sharpe (probability SR exceeds the 6-trial benchmark) | {g['deflated_sharpe_ratio']:.3f} | {n['deflated_sharpe_ratio']:.3f} |",
+        "",
+        f"Annual turnover {n['annual_turnover']:.1f}x. Point-in-time fundamental coverage of the stock-day panel from 2016: "
+        f"book equity {cov['book_equity']:.0%}, net income {cov['net_income']:.0%}, market cap {cov['market_cap']:.0%}.",
         "",
         f"Pre-fix Fama-MacBeth timing on the same data, for comparison: Reversal t-stat {old.loc['Reversal', 't_stat']:+.1f} "
         "(the signal was regressed on the month whose prices it was built from).",

@@ -2,6 +2,11 @@
   "start": "2015-01-02",
   "end": "2024-06-28",
   "n_tickers": 466,
-  "n_with_shares": 466,
+  "fundamental_coverage": {
+    "book_equity": 0.867493288968189,
+    "net_income": 0.856345742714311,
+    "shares": 0.9036203404542604,
+    "market_cap": 0.9033772162479305
+  },
   "universe": "current S&P 500 members (survivorship biased)"
 }
