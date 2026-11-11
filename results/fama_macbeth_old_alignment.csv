@@ -1,0 +1,5 @@
+factor,mean_coef,t_stat,p_value,significant
+Momentum,0.000761056,0.568449,0.571005,False
+Reversal,-0.032526,-30.5969,1.41536e-52,True
+LowVol,-0.000142261,-0.0598898,0.952363,False
+Size,-0.00156013,-2.21343,0.0291408,True

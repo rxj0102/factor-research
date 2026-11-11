@@ -1,0 +1,7 @@
+{
+  "start": "2015-01-02",
+  "end": "2024-06-28",
+  "n_tickers": 466,
+  "n_with_shares": 466,
+  "universe": "current S&P 500 members (survivorship biased)"
+}
