@@ -42,8 +42,12 @@ def quintile_portfolios(
     fwd_ret = prices.shift(-fwd_days) / prices - 1
 
     # Month-end rebalancing dates
-    rebal_dates = factor.resample(rebal_freq).last().index
-    rebal_dates = [d for d in rebal_dates if d in factor.index]
+    # last trading day of each month; filtering calendar month-ends on the
+    # index skipped months that end on a weekend or holiday
+    if rebal_freq != "ME":
+        raise ValueError("only month-end rebalancing is supported")
+    idx = factor.index.to_series()
+    rebal_dates = list(idx.groupby(factor.index.to_period("M")).max())
 
     rows = []
     for d in rebal_dates:
