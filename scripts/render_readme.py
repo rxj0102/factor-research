@@ -21,46 +21,68 @@ END = "<!-- results:end -->"
 def block() -> str:
     R = ROOT / "results"
     info = json.loads((R / "run_info.json").read_text())
-    ic = pd.read_csv(R / "factor_ic.csv").set_index("factor")
-    q = pd.read_csv(R / "quintile_spread.csv").set_index("factor")
-    fm = pd.read_csv(R / "fama_macbeth.csv").set_index("factor")
+    bias = pd.read_csv(R / "universe_bias.csv").set_index("factor")
+    mem = pd.read_csv(R / "membership_by_year.csv")
+    ic = pd.read_csv(R / "pit_factor_ic.csv").set_index("factor")
+    fm = pd.read_csv(R / "pit_fama_macbeth.csv").set_index("factor")
+    fm_cur = pd.read_csv(R / "fama_macbeth.csv").set_index("factor")
+    old = pd.read_csv(R / "fama_macbeth_old_alignment.csv").set_index("factor")
+    cur = json.loads((R / "composite_performance.json").read_text())["net"]
+    pit = json.loads((R / "pit_composite_performance.json").read_text())["net"]
+    cov = info["fundamental_coverage"]
+    n = info["n_tickers"]
     lines = [
         START,
-        f"{info['n_tickers']} current S&P 500 members, {info['start']} to {info['end']}. "
-        "Each month-end signal is evaluated against the following month's return (non-overlapping). "
-        "IC t-stats use the monthly IC series; Fama-MacBeth t-stats use Newey-West with 4 lags; "
-        "the quintile spread is equal-weighted top minus bottom quintile, before costs.",
+        f"{n} tickers, {info['start']} to {info['end']}. On the first day only "
+        f"{info['members_on_first_day']} of them were in the index; the other {info['joined_after_start']} "
+        "joined later and are in the sample only because we know today that they did.",
         "",
-        "| Factor | Months | Mean IC | IC t-stat | Q5 minus Q1 (ann.) | Spread t-stat | Fama-MacBeth coef | FM t-stat |",
+        "| Start of year | " + " | ".join(str(int(y)) for y in mem["year"][::3]) + " |",
+        "|---|" + "---|" * len(mem["year"][::3]),
+        "| Tickers already in the index | " + " | ".join(str(int(v)) for v in mem["already_members"][::3]) + " |",
+        "",
+        "**The same six factors on two universes.** Equal-weighted top minus bottom quintile, next month's "
+        "return, annualised, before costs. The bias column is the difference, tested on the paired monthly series.",
+        "",
+        "| Factor | Months | Today's members, all days | t | Members at the time | t | Look-ahead bias | t |",
         "|---|---|---|---|---|---|---|---|",
+    ]
+    for f in bias.index:
+        r = bias.loc[f]
+        lines.append(
+            f"| {f} | {int(r['months'])} | {r['spread_current_ann']:+.1%} | {r['t_current']:+.2f} | "
+            f"{r['spread_pit_ann']:+.1%} | {r['t_pit']:+.2f} | {r['bias_ann']:+.1%} | {r['bias_t']:+.2f} |"
+        )
+    lines += [
+        "",
+        "**Members at the time, in more detail.** IC t-stats use the monthly IC series; Fama-MacBeth "
+        "t-stats use Newey-West with 4 lags. The last column is the Fama-MacBeth t-stat on today's members.",
+        "",
+        "| Factor | Mean IC | IC t-stat | Fama-MacBeth coef | FM t-stat | FM t-stat, today's members |",
+        "|---|---|---|---|---|---|",
     ]
     for f in ic.index:
         lines.append(
-            f"| {f} | {int(ic.loc[f, 'months'])} | {ic.loc[f, 'mean_IC']:+.4f} | {ic.loc[f, 't_stat']:+.2f} | "
-            f"{q.loc[f, 'ann_return']:+.2%} | {q.loc[f, 't_stat']:+.2f} | "
-            f"{fm.loc[f, 'mean_coef']:+.4f} | {fm.loc[f, 't_stat']:+.2f} |"
+            f"| {f} | {ic.loc[f, 'mean_IC']:+.4f} | {ic.loc[f, 't_stat']:+.2f} | "
+            f"{fm.loc[f, 'mean_coef']:+.4f} | {fm.loc[f, 't_stat']:+.2f} | {fm_cur.loc[f, 't_stat']:+.2f} |"
         )
-    old = pd.read_csv(R / "fama_macbeth_old_alignment.csv").set_index("factor")
-    perf = json.loads((R / "composite_performance.json").read_text())
-    n, g = perf["net"], perf["gross"]
-    cov = info["fundamental_coverage"]
     lines += [
         "",
-        "Composite long-short portfolio (ERC-weighted across all six factors, top and bottom quintile, monthly):",
+        "**Composite long-short portfolio** (ERC-weighted across the six factors, top and bottom quintile, "
+        "monthly, net of 5 bps costs, filled at the next close):",
         "",
-        "| | Gross | Net of 5 bps costs |",
+        "| | Today's members, all days | Members at the time |",
         "|---|---|---|",
-        f"| Annual return | {g['annualized_return']:+.2%} | {n['annualized_return']:+.2%} |",
-        f"| Annual volatility | {g['annualized_volatility']:.2%} | {n['annualized_volatility']:.2%} |",
-        f"| Sharpe ratio | {g['sharpe_ratio']:.2f} | {n['sharpe_ratio']:.2f} |",
-        f"| Max drawdown | {g['max_drawdown']:.2%} | {n['max_drawdown']:.2%} |",
-        f"| Deflated Sharpe (probability SR exceeds the 6-trial benchmark) | {g['deflated_sharpe_ratio']:.3f} | {n['deflated_sharpe_ratio']:.3f} |",
+        f"| Annual return | {cur['annualized_return']:+.2%} | {pit['annualized_return']:+.2%} |",
+        f"| Annual volatility | {cur['annualized_volatility']:.2%} | {pit['annualized_volatility']:.2%} |",
+        f"| Sharpe ratio | {cur['sharpe_ratio']:.2f} | {pit['sharpe_ratio']:.2f} |",
+        f"| Max drawdown | {cur['max_drawdown']:.1%} | {pit['max_drawdown']:.1%} |",
+        f"| Deflated Sharpe (probability SR exceeds the 6-trial benchmark) | {cur['deflated_sharpe_ratio']:.3f} | {pit['deflated_sharpe_ratio']:.3f} |",
         "",
-        f"Annual turnover {n['annual_turnover']:.1f}x. Point-in-time fundamental coverage of the stock-day panel from 2016: "
-        f"book equity {cov['book_equity']:.0%}, net income {cov['net_income']:.0%}, market cap {cov['market_cap']:.0%}.",
-        "",
-        f"Pre-fix Fama-MacBeth timing on the same data, for comparison: Reversal t-stat {old.loc['Reversal', 't_stat']:+.1f} "
-        "(the signal was regressed on the month whose prices it was built from).",
+        f"Point-in-time fundamental coverage of the stock-day panel from 2016: book equity {cov['book_equity']:.0%}, "
+        f"net income {cov['net_income']:.0%}, market cap {cov['market_cap']:.0%}. "
+        f"A second, separate timing error is kept as a diagnostic: with the signal regressed on the month whose "
+        f"prices it was built from, the Reversal Fama-MacBeth t-stat on today's members was {old.loc['Reversal', 't_stat']:+.1f}.",
         END,
     ]
     return "\n".join(lines)

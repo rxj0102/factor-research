@@ -8,5 +8,7 @@
     "shares": 0.9036203404542604,
     "market_cap": 0.9033772162479305
   },
-  "universe": "current S&P 500 members (survivorship biased)"
+  "universe": "current S&P 500 members (survivorship biased)",
+  "joined_after_start": 151,
+  "members_on_first_day": 315
 }
