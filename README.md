@@ -1,221 +1,125 @@
-# Cross-Sectional Factor Research Framework
+# Universe look-ahead in a factor backtest, measured
 
 [![CI](https://github.com/rxj0102/factor-research/actions/workflows/ci.yml/badge.svg)](https://github.com/rxj0102/factor-research/actions/workflows/ci.yml)
 
-A production-quality quantitative research framework for systematic factor investing on US equities (S&P 500 universe). Implements six canonical factors, rigorous analytics (IC, ICIR, Fama-MacBeth, factor decay, quintile analysis), and a multi-factor long-short portfolio with ERC weighting.
+**Question.** The most common shortcut in a home-built equity backtest is to take today's index members and run them back ten years. How much does that shortcut change the answer?
 
----
+**Answer.** Enough to invent a factor. Six standard factors are run twice on the same prices and the same code: once on today's S&P 500 members for every day of the sample, and once counting each company only on days when it was in the index. The table below shows the difference. The apparent size premium loses more than half its value and its significance, the Fama-MacBeth evidence for momentum and size disappears, and the composite long-short portfolio goes from a small positive Sharpe ratio to a negative one.
 
-## Project Structure
-
-```
-factor-research/
-├── data/               # Data loading utilities + static S&P 500 universe
-│   ├── universe.py     # ~490 S&P 500 tickers
-│   ├── loader.py       # yfinance price/market-cap downloads; fundamental stubs
-│   └── fundamentals_pit.py  # point-in-time EDGAR panels (book equity, net income, shares)
-├── factors/            # One file per factor signal
-│   ├── momentum.py     # 12-1 month return (Jegadeesh-Titman)
-│   ├── value.py        # Book-to-Market ratio
-│   ├── quality.py      # Return on Equity (ROE)
-│   ├── low_volatility.py  # Negative 20-day realized vol
-│   ├── reversal.py     # Negative 5-day return
-│   └── size.py         # Negative log market cap
-├── analytics/          # Statistical analysis tools
-│   ├── ic_analysis.py      # Rolling IC, ICIR (Spearman)
-│   ├── factor_decay.py     # IC decay at lags 1/2/3/5/10/20d
-│   ├── quintile_analysis.py # Quintile portfolio returns
-│   ├── fama_macbeth.py     # Two-pass FM regression + Newey-West
-│   ├── factor_correlation.py # 6×6 monthly corr matrix; crowding flags
-│   └── deflated_sharpe.py  # Bailey-Lopez de Prado (2014) DSR
-├── portfolio/          # Portfolio construction
-│   ├── erc.py          # Equal Risk Contribution optimizer (SQP)
-│   ├── construction.py # Long-short with ERC weights + TC
-│   └── performance.py  # Annualized return, Sharpe, MDD, DSR
-├── outputs/            # Generated charts and CSVs
-├── notebooks/
-│   └── factor_research_summary.ipynb  # End-to-end walkthrough
-├── scripts/
-│   ├── real_factor_study.py  # verified study on real point-in-time data
-│   ├── fetch_edgar_fundamentals.py, fetch_splits.py, fetch_close_unadjusted.py
-│   └── render_readme.py      # renders the Results block, checked in CI
-├── results/            # outputs of real_factor_study.py
-├── data/snapshot/      # frozen prices and share counts
-├── run_research.py     # Main pipeline script
-└── requirements.txt
-```
-
----
-
-## Methodology
-
-### Universe
-Static list of ~490 S&P 500 constituents. Prices and market cap downloaded via `yfinance`. Fundamentals (B/M, ROE) loaded from Simfin free tier or simulated via realistic log-normal process when API unavailable.
-
-### Factors
-
-| Factor | Signal | Direction | Literature |
-|---|---|---|---|
-| **Momentum** | Cumulative return months 2–12 | Long winners | Jegadeesh & Titman (1993) |
-| **Value** | Book-to-Market ratio | Long cheap | Fama & French (1992) |
-| **Quality** | Return on Equity (ROE) | Long profitable | Novy-Marx (2013) |
-| **Low Volatility** | −(20d realized vol) | Long low-vol | Ang et al. (2006) |
-| **Reversal** | −(5d return) | Long recent losers | Jegadeesh (1990) |
-| **Size** | −log(market cap) | Long small | Banz (1981) |
-
-All signals are cross-sectionally z-scored before combination.
-
-### Analytics
-
-- **IC / ICIR**: Spearman rank correlation between factor signal and forward returns (1d, 5d, 20d). Rolling 252-day window.
-- **Factor Decay**: Mean IC at forward lags {1, 2, 3, 5, 10, 20} days - measures signal persistence.
-- **Quintile Analysis**: Monthly ranking into 5 equal buckets; equal-weighted 20d forward returns; Q5-Q1 spread.
-- **Fama-MacBeth**: Monthly cross-sectional OLS of returns on standardized factor exposures; Newey-West t-statistics with 4 lags.
-- **Factor Correlation**: Average monthly Spearman correlation matrix; |corr| > 0.6 flagged as crowded.
-- **Deflated Sharpe Ratio**: Corrects observed SR for non-normality (skewness, excess kurtosis) and multiple testing (Bailey & Lopez de Prado 2014).
-
-### Portfolio Construction
-
-- **Combination**: Equal Risk Contribution (ERC) weights on all 6 factors; solved via Sequential Quadratic Programming.
-- **Long-Short**: Long top quintile (20%), short bottom quintile (20%), dollar-neutral.
-- **Rebalancing**: Monthly (end-of-month).
-- **Transaction Costs**: 5 bps one-way on gross turnover.
-
----
+Every number here is written by `scripts/real_factor_study.py` from frozen inputs, and CI fails if this page and the results files disagree.
 
 ## Results
 
-All six factors now run on real data. Momentum, Reversal and Low Volatility use total-return prices. Value (book-to-market), Quality (ROE) and Size come from SEC EDGAR XBRL filings: book equity, fiscal-year net income and shares outstanding, each as first reported and usable from the day after its filing date (`data/fundamentals_pit.py`). Firms with non-positive book equity are excluded from Value and Quality. Market cap is the split-adjusted, dividend-unadjusted close times reported shares, put on a common split basis. `scripts/real_factor_study.py` produces everything below from frozen inputs in `data/snapshot/` and writes `results/`; CI checks that this block matches.
-
 <!-- results:start (generated by scripts/render_readme.py, do not edit by hand) -->
-466 current S&P 500 members, 2015-01-02 to 2024-06-28. Each month-end signal is evaluated against the following month's return (non-overlapping). IC t-stats use the monthly IC series; Fama-MacBeth t-stats use Newey-West with 4 lags; the quintile spread is equal-weighted top minus bottom quintile, before costs.
+466 tickers, 2015-01-02 to 2024-06-28. On the first day only 315 of them were in the index; the other 151 joined later and are in the sample only because we know today that they did.
 
-| Factor | Months | Mean IC | IC t-stat | Q5 minus Q1 (ann.) | Spread t-stat | Fama-MacBeth coef | FM t-stat |
+| Start of year | 2015 | 2018 | 2021 | 2024 |
+|---|---|---|---|---|
+| Tickers already in the index | 315 | 373 | 422 | 460 |
+
+**The same six factors on two universes.** Equal-weighted top minus bottom quintile, next month's return, annualised, before costs. The bias column is the difference, tested on the paired monthly series.
+
+| Factor | Months | Today's members, all days | t | Members at the time | t | Look-ahead bias | t |
 |---|---|---|---|---|---|---|---|
-| Momentum | 101 | -0.0112 | -0.54 | -1.53% | -0.28 | +0.0025 | +2.07 |
-| Value | 113 | -0.0190 | -1.11 | -3.58% | -0.79 | -0.0000 | -0.02 |
-| Quality | 113 | +0.0076 | +0.72 | -1.98% | -0.71 | +0.0002 | +0.26 |
-| LowVol | 112 | -0.0123 | -0.62 | -9.47% | -1.69 | -0.0039 | -3.17 |
-| Reversal | 113 | +0.0144 | +0.98 | +3.22% | +0.73 | +0.0006 | +0.53 |
-| Size | 113 | +0.0394 | +3.66 | +12.49% | +3.95 | +0.0022 | +3.13 |
+| Momentum | 101 | -1.5% | -0.28 | -5.4% | -0.93 | +3.8% | +3.37 |
+| Value | 113 | -3.6% | -0.79 | -1.3% | -0.28 | -2.3% | -2.14 |
+| Quality | 113 | -2.0% | -0.71 | +1.5% | +0.57 | -3.5% | -3.29 |
+| LowVol | 112 | -9.5% | -1.69 | -5.7% | -1.01 | -3.8% | -4.15 |
+| Reversal | 113 | +3.2% | +0.73 | +4.2% | +0.95 | -0.9% | -1.13 |
+| Size | 113 | +12.5% | +3.95 | +5.7% | +1.80 | +6.8% | +5.40 |
 
-Composite long-short portfolio (ERC-weighted across all six factors, top and bottom quintile, monthly):
+**Members at the time, in more detail.** IC t-stats use the monthly IC series; Fama-MacBeth t-stats use Newey-West with 4 lags. The last column is the Fama-MacBeth t-stat on today's members.
 
-| | Gross | Net of 5 bps costs |
+| Factor | Mean IC | IC t-stat | Fama-MacBeth coef | FM t-stat | FM t-stat, today's members |
+|---|---|---|---|---|---|
+| Momentum | -0.0220 | -0.99 | -0.0004 | -0.41 | +2.07 |
+| Value | -0.0103 | -0.58 | -0.0003 | -0.18 | -0.02 |
+| Quality | +0.0124 | +1.09 | +0.0002 | +0.40 | +0.26 |
+| LowVol | -0.0057 | -0.27 | -0.0028 | -2.55 | -3.17 |
+| Reversal | +0.0164 | +1.05 | +0.0004 | +0.42 | +0.53 |
+| Size | +0.0186 | +1.69 | +0.0004 | +0.52 | +3.13 |
+
+**Composite long-short portfolio** (ERC-weighted across the six factors, top and bottom quintile, monthly, net of 5 bps costs, filled at the next close):
+
+| | Today's members, all days | Members at the time |
 |---|---|---|
-| Annual return | +2.27% | +1.71% |
-| Annual volatility | 5.44% | 5.44% |
-| Sharpe ratio | 0.42 | 0.32 |
-| Max drawdown | -14.91% | -15.16% |
-| Deflated Sharpe (probability SR exceeds the 6-trial benchmark) | 0.004 | 0.002 |
+| Annual return | +1.29% | -1.08% |
+| Annual volatility | 5.43% | 5.69% |
+| Sharpe ratio | 0.24 | -0.19 |
+| Max drawdown | -16.2% | -24.5% |
+| Deflated Sharpe (probability SR exceeds the 6-trial benchmark) | 0.001 | 0.000 |
 
-Annual turnover 10.9x. Point-in-time fundamental coverage of the stock-day panel from 2016: book equity 87%, net income 86%, market cap 90%.
-
-Pre-fix Fama-MacBeth timing on the same data, for comparison: Reversal t-stat -27.4 (the signal was regressed on the month whose prices it was built from).
+Point-in-time fundamental coverage of the stock-day panel from 2016: book equity 87%, net income 86%, market cap 90%. A second, separate timing error is kept as a diagnostic: with the signal regressed on the month whose prices it was built from, the Reversal Fama-MacBeth t-stat on today's members was -27.4.
 <!-- results:end -->
 
-How to read this:
+## Reading the results
 
-- **Size is not evidence of a small-cap premium.** The universe is today's S&P 500, so stocks that were small in 2015 and are members now are the ones that grew into the index. Market cap now uses point-in-time share counts, but the survivorship bias remains. Treat this row as a demonstration of that bias.
-- **No other factor shows a reliable single-factor premium here.** Momentum, Value, Quality, Low Volatility and Reversal all have IC t-stats inside plus or minus 2, and the Low Volatility quintile spread is negative.
-- **Fama-MacBeth tells a different story from the univariate tests.** Controlling for the other factors, Momentum and Low Volatility are significant, with Low Volatility of the opposite sign to the usual anomaly. Six factors on one survivorship-biased sample is a multiple-testing problem, so treat these as exploratory.
-- **The composite portfolio does not clear the deflated Sharpe hurdle,** and it includes the survivorship-biased Size factor.
+- **Why the bias has a direction.** A company that joins the index later is, almost by definition, one that grew. Before it joined it was smaller, more volatile, less profitable and rising. Letting it into the sample early hands the small, high-momentum, high-volatility, low-quality buckets a set of known future winners. That is the sign of every significant entry in the bias column.
+- **Size is the clearest case.** On today's members it looks like a strong small-cap premium. Counting companies only once they are members, the spread is less than half as large and no longer significant, and its Fama-MacBeth coefficient is indistinguishable from zero.
+- **No factor earns a reliable premium in the corrected sample.** Over 2015 to 2024 none of the six has an IC or spread t-statistic above 2. Low volatility has a significant negative Fama-MacBeth coefficient, the opposite of the textbook anomaly, in a decade led by volatile growth stocks.
+- **The corrected column is still biased.** It removes companies before they joined. It cannot add back the companies that left the index, because the price snapshot does not contain them. Companies leave mostly by being acquired or by shrinking, so the remaining bias probably still flatters some factors. The true numbers need a database with delisted stocks.
 
-**Fixes made while producing these results.**
+## Method
 
-- Fama-MacBeth timing: the regression at month-end t used the return over the month ending at t, so a signal built from that month's prices could explain its own inputs. The comparison line under the table shows the effect on Reversal. The signal at t is now regressed on the return from t to t+1 (`analytics/fama_macbeth.py`, with tests that fail on the old alignment). This also affects `run_research.py` and the notebook.
-- The composite portfolio could never run: `s.std().replace(0, nan)` called `replace` on a scalar and raised.
-- Rebalance dates were calendar month-ends kept only if they were trading days, so months ending on a weekend or holiday were skipped and the prior book was held for two months. Both the portfolio builder and the quintile analysis now use the last trading day of every month.
-- The ERC factor weights came from the covariance of each factor's average signal level, which is not a return. They now use trailing 12-month factor long-short returns.
-- Costs were charged twice: turnover already counts buys and sells, and was then multiplied by 2 again.
-
-Each of these has a test in `tests/`.
-
-### Caveats that apply to any result
-
-- **`run_research.py` still uses simulated fundamentals.** It calls `load_fundamentals_simulated`, which generates random book value, net income and equity, so its Value and Quality factors are noise. The verified results above come from `scripts/real_factor_study.py`, which uses EDGAR data instead.
-- **Survivorship bias.** The universe is a static list of current S&P 500 members.
-- **Execution timing.** Portfolio weights set at the rebalance close are now filled at the next close (`exec_lag=1` in `build_long_short_portfolio`), so the first return earned is two trading days after the signal. `exec_lag=0` reproduces the old same-close fill; `run_research.py` writes both to `outputs/exec_lag_comparison.csv`.
-- **Multiple testing.** Six factors and several variants were examined; the Deflated Sharpe Ratio is reported for that reason, but it does not remove survivorship bias.
-
----
-
-## Quick Start
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Verified study on real point-in-time data (reads data/snapshot/, about 30 seconds)
-make reproduce
-
-# Full pipeline including the simulated Value and Quality factors
-python run_research.py
-
-# Fast mode (80 tickers, faster)
-python run_research.py --fast
-
-# Launch notebook
-jupyter notebook notebooks/factor_research_summary.ipynb
-```
-
----
-
-## Key Outputs
-
-| File | Description |
+| Step | What is done |
 |---|---|
-| `outputs/ic_icir_summary.csv` | IC & ICIR per factor per horizon |
-| `outputs/factor_decay.png` | 6-panel IC decay curves |
-| `outputs/quintile_spreads.png` | 6-panel quintile return bars |
-| `outputs/fama_macbeth_results.csv` | FM coefficients + Newey-West t-stats |
-| `outputs/factor_correlation.csv` | 6×6 factor correlation matrix |
-| `outputs/portfolio_performance.csv` | Full performance metrics |
-| `notebooks/factor_research_summary.ipynb` | Interactive end-to-end walkthrough |
-| `results/factor_ic.csv`, `results/quintile_spread.csv`, `results/fama_macbeth.csv` | Verified real-price factor study behind the Results table |
+| Prices | Daily total-return prices for today's index members, 2015 to mid 2024. |
+| Fundamentals | SEC EDGAR XBRL filings: book equity, fiscal-year net income and shares outstanding, each as first reported and usable from the day after its filing date (`data/fundamentals_pit.py`). |
+| Membership | Wikipedia's constituents table (date each member was added) and change log, frozen in `data/snapshot` (`data/membership.py`). |
+| Factors | Momentum (months 2 to 12), value (book to market), quality (return on equity), low volatility (20 day), reversal (5 day), size (log market cap). One file each in `factors/`. |
+| Tests | Month-end signal against the next month's return. Rank IC, equal-weighted quintile spread, Fama-MacBeth with Newey-West errors, and an ERC-weighted composite long-short portfolio with costs and a one day execution lag. |
+| Bias | The difference between the two quintile spreads, month by month, with a paired t-statistic. |
 
----
+## Bugs found on the way
 
-## Reproducibility
+Each has a test in `tests/` that fails on the old code.
 
-### Data availability
+- Fama-MacBeth regressed the signal at month-end t on the return of the month ending at t, so a signal built from that month's prices explained its own inputs. The diagnostic line under the tables shows how large the false result was.
+- Rebalance dates skipped any month that ended on a weekend or holiday.
+- ERC factor weights were computed from the covariance of signal levels, which are not returns.
+- Trading costs were charged twice.
+- Orders were filled at the same close that produced the signal. They are now filled at the next close.
 
-All inputs come from free, public sources. No paid data or API keys are required unless noted.
+## Limits
 
-- Yahoo Finance via the yfinance package (free, no key)
-- SEC EDGAR XBRL company facts (free, requires a User-Agent header)
-- `data/snapshot/`, downloaded on 2026-11-10: total-return prices and split-adjusted closes (475 of 504 listed tickers returned data; 466 have at least half the history), EDGAR facts for all 475 (`scripts/fetch_edgar_fundamentals.py`, about 5 minutes), and split history (`scripts/fetch_splits.py`)
+- Companies that left the index are missing, as explained above.
+- One decade, one country, large caps only.
+- Prices come from Yahoo Finance and are frozen in `data/snapshot` so that results reproduce. Membership dates come from Wikipedia and may contain errors; a ticker with no record is treated as a member throughout.
+- Quintile spreads are before costs. Only the composite portfolio is charged costs.
+- Six factors on one sample is a multiple-testing problem. The deflated Sharpe ratio is reported for the composite for that reason.
 
-### Computational requirements
-
-- Python 3.12.3. Every dependency version is pinned in `uv.lock`.
-- Checked on Linux x86_64 with 2 CPU cores and 8 GB RAM. No GPU is needed.
-
-```bash
-pip install uv     # once
-uv sync            # installs the exact pinned environment
-uv run pytest -q   # runs the test suite
-```
-
-### Runtime
-
-The test suite (21 tests) finishes in a few seconds on the machine above. `make reproduce` runs the factor study from the snapshot in about 30 seconds; refreshing the snapshot (`uv run python scripts/real_factor_study.py --refresh`) takes about 7 minutes.
+## Reproduce
 
 ```bash
-make reproduce   # factor study from data/snapshot/, write results/, refresh the README block
-make check       # confirm the README matches results/ (also run in CI)
+pip install uv && uv sync
+uv run pytest -q     # 28 tests, a few seconds
+make reproduce       # reruns the study from data/snapshot (about a minute) and rewrites this page
+make check           # confirms this page matches results/
 ```
 
-### Citation
+`uv run python scripts/real_factor_study.py --refresh` downloads prices again (about 7 minutes). `uv run python -m data.membership` refreshes the membership tables. Python 3.12; every dependency is pinned in `uv.lock`.
 
-Citation metadata is in `CITATION.cff`. GitHub turns it into a Cite this repository button on the repo page.
+## Layout
 
+```
+data/            point-in-time fundamentals and membership, frozen snapshot
+factors/         one file per factor
+analytics/       IC, Fama-MacBeth, deflated Sharpe ratio
+portfolio/       ERC weights, long-short construction, performance
+scripts/         real_factor_study.py writes results/, render_readme.py writes this page
+tests/           28 tests
+results/         every number on this page
+```
 
 ## References
 
-- Jegadeesh, N. & Titman, S. (1993). Returns to Buying Winners and Selling Losers. *Journal of Finance*.
-- Fama, E. & French, K. (1992). The Cross-Section of Expected Stock Returns. *Journal of Finance*.
-- Novy-Marx, R. (2013). The Other Side of Value: The Gross Profitability Premium. *Journal of Financial Economics*.
-- Ang, A., et al. (2006). The Cross-Section of Volatility and Expected Returns. *Journal of Finance*.
-- Bailey, D.H. & Lopez de Prado, M. (2014). The Deflated Sharpe Ratio. *Journal of Portfolio Management*.
-- Fama, E. & MacBeth, J. (1973). Risk, Return, and Equilibrium. *Journal of Political Economy*.
+- Ang, A., Hodrick, R., Xing, Y. and Zhang, X. (2006). The cross-section of volatility and expected returns. *Journal of Finance* 61(1).
+- Bailey, D. and Lopez de Prado, M. (2014). The deflated Sharpe ratio. *Journal of Portfolio Management* 40(5).
+- Banz, R. (1981). The relationship between return and market value of common stocks. *Journal of Financial Economics* 9(1).
+- Fama, E. and French, K. (1992). The cross-section of expected stock returns. *Journal of Finance* 47(2).
+- Fama, E. and MacBeth, J. (1973). Risk, return, and equilibrium. *Journal of Political Economy* 81(3).
+- Jegadeesh, N. (1990). Evidence of predictable behavior of security returns. *Journal of Finance* 45(3).
+- Jegadeesh, N. and Titman, S. (1993). Returns to buying winners and selling losers. *Journal of Finance* 48(1).
+- Novy-Marx, R. (2013). The other side of value: the gross profitability premium. *Journal of Financial Economics* 108(1).
+
+Citation metadata is in `CITATION.cff`.

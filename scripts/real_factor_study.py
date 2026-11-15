@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT))
 
 from analytics.fama_macbeth import fama_macbeth_regression  # noqa: E402
 from data.fundamentals_pit import build as build_fundamentals  # noqa: E402
+from data.membership import membership_mask  # noqa: E402
 from data.universe import SP500_TICKERS  # noqa: E402
 from factors import (  # noqa: E402
     compute_low_volatility, compute_momentum, compute_quality, compute_reversal, compute_size, compute_value,
@@ -102,6 +103,28 @@ def tstat(s: pd.Series) -> float:
     return float(s.mean() / s.std(ddof=1) * np.sqrt(len(s)))
 
 
+def analyse(factors: dict, prices: pd.DataFrame, me_prices: pd.DataFrame):
+    """IC, quintile spreads, Fama-MacBeth and the composite portfolio for one set of signals."""
+    ic_rows, q_rows, spreads = [], [], {}
+    for name, f in factors.items():
+        ic = monthly_ic(f, me_prices)
+        ic_rows.append({"factor": name, "months": len(ic), "mean_IC": ic.mean(), "t_stat": tstat(ic),
+                        "IC_positive_share": (ic > 0).mean()})
+        sp = quintile_spread(f, me_prices)
+        spreads[name] = sp
+        q_rows.append({"factor": name, "months": len(sp), "mean_monthly": sp.mean(),
+                       "ann_return": sp.mean() * 12, "ann_sharpe": sp.mean() / sp.std(ddof=1) * np.sqrt(12),
+                       "t_stat": tstat(sp)})
+    monthly_ret = me_prices.pct_change()
+    monthly_factors = {n: f.reindex(me_prices.index) for n, f in factors.items()}
+    _, fm = fama_macbeth_regression(monthly_factors, monthly_ret)
+    # Diagnostic: the pre-fix alignment (signal at t against the month ending at t).
+    # The function now shifts returns forward one month, so shift back to emulate it.
+    _, fm_old = fama_macbeth_regression(monthly_factors, monthly_ret.shift(1))
+    port = build_long_short_portfolio(factors, prices)
+    return ic_rows, q_rows, fm, fm_old, port, spreads
+
+
 def main() -> None:
     refresh = "--refresh" in sys.argv
     prices = snapshot_prices(refresh)
@@ -122,26 +145,29 @@ def main() -> None:
     me_idx = [prices.index[prices.index <= d][-1] for d in me.index]
     me_prices = prices.loc[me_idx]
 
-    ic_rows, q_rows = [], []
-    for name, f in factors.items():
-        ic = monthly_ic(f, me_prices)
-        ic_rows.append({"factor": name, "months": len(ic), "mean_IC": ic.mean(), "t_stat": tstat(ic),
-                        "IC_positive_share": (ic > 0).mean()})
-        sp = quintile_spread(f, me_prices)
-        q_rows.append({"factor": name, "months": len(sp), "mean_monthly": sp.mean(),
-                       "ann_return": sp.mean() * 12, "ann_sharpe": sp.mean() / sp.std(ddof=1) * np.sqrt(12),
-                       "t_stat": tstat(sp)})
+    # Universe 1: every ticker in the snapshot on every day (today's members, look-ahead).
+    ic_rows, q_rows, fm, fm_old, port, spreads = analyse(factors, prices, me_prices)
+    # Universe 2: a ticker counts only on days when the company was in the index.
+    mask = membership_mask(prices.index, list(prices.columns))
+    pit_factors = {n: f.where(mask.reindex(index=f.index, columns=f.columns)) for n, f in factors.items()}
+    pit_ic, pit_q, pit_fm, _, pit_port, pit_spreads = analyse(pit_factors, prices, me_prices)
 
-    monthly_ret = me_prices.pct_change()
-    monthly_factors = {n: f.reindex(me_prices.index) for n, f in factors.items()}
-    _, fm = fama_macbeth_regression(monthly_factors, monthly_ret)
-    # Diagnostic: the pre-fix alignment (signal at t against the month ending at t).
-    # The function now shifts returns forward one month, so shift back to emulate it.
-    _, fm_old = fama_macbeth_regression(monthly_factors, monthly_ret.shift(1))
+    bias_rows = []
+    for name in factors:
+        both = pd.concat([spreads[name], pit_spreads[name]], axis=1, keys=["cur", "pit"]).dropna()
+        d = both["cur"] - both["pit"]
+        bias_rows.append({"factor": name, "months": len(d),
+                          "spread_current_ann": both["cur"].mean() * 12, "t_current": tstat(both["cur"]),
+                          "spread_pit_ann": both["pit"].mean() * 12, "t_pit": tstat(both["pit"]),
+                          "bias_ann": d.mean() * 12, "bias_t": tstat(d)})
+    first_days = [prices.index[prices.index.year == y][0] for y in sorted(set(prices.index.year))]
+    members = pd.DataFrame({"year": [d.year for d in first_days], "tickers_in_snapshot": prices.shape[1],
+                            "already_members": [int(mask.loc[d].sum()) for d in first_days]})
 
-    port = build_long_short_portfolio(factors, prices)
     perf = portfolio_performance(port, ret_col="net_ret", n_trials=len(factors))
     perf_gross = portfolio_performance(port, ret_col="gross_ret", n_trials=len(factors))
+    pit_perf = portfolio_performance(pit_port, ret_col="net_ret", n_trials=len(factors))
+    pit_perf_gross = portfolio_performance(pit_port, ret_col="gross_ret", n_trials=len(factors))
 
     OUT.mkdir(exist_ok=True)
     port.to_csv(OUT / "composite_daily_returns.csv", float_format="%.8f", index_label="date")
@@ -152,14 +178,25 @@ def main() -> None:
     pd.DataFrame(q_rows).to_csv(OUT / "quintile_spread.csv", index=False, float_format="%.6g")
     fm.reset_index().to_csv(OUT / "fama_macbeth.csv", index=False, float_format="%.6g")
     fm_old.reset_index().to_csv(OUT / "fama_macbeth_old_alignment.csv", index=False, float_format="%.6g")
+    pd.DataFrame(pit_ic).to_csv(OUT / "pit_factor_ic.csv", index=False, float_format="%.6g")
+    pd.DataFrame(pit_q).to_csv(OUT / "pit_quintile_spread.csv", index=False, float_format="%.6g")
+    pit_fm.reset_index().to_csv(OUT / "pit_fama_macbeth.csv", index=False, float_format="%.6g")
+    (OUT / "pit_composite_performance.json").write_text(json.dumps(
+        {"net": {k: float(f"{float(v):.6g}") for k, v in pit_perf.items()},
+         "gross": {k: float(f"{float(v):.6g}") for k, v in pit_perf_gross.items()}}, indent=2) + "\n")
+    pd.DataFrame(bias_rows).to_csv(OUT / "universe_bias.csv", index=False, float_format="%.6g")
+    members.to_csv(OUT / "membership_by_year.csv", index=False)
     cov = {k: float(v.loc[prices.index >= "2016-01-01"].notna().mean().mean()) for k, v in fund.items()}
     info = {"start": str(prices.index[0].date()), "end": str(prices.index[-1].date()),
             "n_tickers": int(prices.shape[1]), "fundamental_coverage": cov,
-            "universe": "current S&P 500 members (survivorship biased)"}
+            "universe": "current S&P 500 members (survivorship biased)",
+            "joined_after_start": int((~mask.iloc[0]).sum()), "members_on_first_day": int(mask.iloc[0].sum())}
     (OUT / "run_info.json").write_text(json.dumps(info, indent=2) + "\n")
     print(json.dumps(info, indent=2))
     print(pd.DataFrame(ic_rows).to_string(index=False))
     print(pd.DataFrame(q_rows).to_string(index=False))
+    print(pd.DataFrame(bias_rows).round(4).to_string(index=False))
+    print(members.to_string(index=False))
     print(fm.to_string())
     print(json.dumps(perf, indent=2, default=float))
 
