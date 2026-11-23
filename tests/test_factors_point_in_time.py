@@ -86,3 +86,14 @@ def test_deflated_sharpe_more_trials_never_raises_dsr():
 def test_deflated_sharpe_zero_vol_is_handled():
     out = deflated_sharpe_ratio(np.zeros(100), n_trials=5)
     assert out["dsr"] == 0.0 and out["p_value"] == 1.0
+
+
+def test_deflated_sharpe_hurdle_shrinks_with_track_record_length():
+    """The null hurdle is E[max Z] / sqrt(T): a longer record lowers it."""
+    from scipy.stats import norm
+    import numpy as np
+    n = 6
+    ez = (1 - np.euler_gamma) * norm.ppf(1 - 1 / n) + np.euler_gamma * norm.ppf(1 - 1 / (n * np.e))
+    for T in (500, 2500):
+        r = np.random.default_rng(0).standard_normal(T) * 0.01
+        assert abs(deflated_sharpe_ratio(r, n_trials=n)["benchmark_sr"] - ez / np.sqrt(T)) < 1e-12

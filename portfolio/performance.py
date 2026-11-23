@@ -43,7 +43,9 @@ def portfolio_performance(
 
     ann_ret = cum.iloc[-1] ** (1 / n_years) - 1
     ann_vol = rets.std() * np.sqrt(periods_per_year)
-    sharpe = ann_ret / ann_vol if ann_vol > 0 else np.nan
+    # Sharpe ratio on the arithmetic mean, the definition the Deflated Sharpe Ratio uses; the
+    # compound annual return above is reported separately.
+    sharpe = rets.mean() * periods_per_year / ann_vol if ann_vol > 0 else np.nan
 
     # Max drawdown
     roll_max = cum.cummax()
