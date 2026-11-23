@@ -45,9 +45,9 @@ Every number here is written by `scripts/real_factor_study.py` from frozen input
 |---|---|---|
 | Annual return | +1.29% | -1.08% |
 | Annual volatility | 5.43% | 5.69% |
-| Sharpe ratio | 0.24 | -0.19 |
+| Sharpe ratio | 0.26 | -0.16 |
 | Max drawdown | -16.2% | -24.5% |
-| Deflated Sharpe (probability SR exceeds the 6-trial benchmark) | 0.001 | 0.000 |
+| Deflated Sharpe (probability SR exceeds the 6-trial benchmark) | 0.311 | 0.036 |
 
 Point-in-time fundamental coverage of the stock-day panel from 2016: book equity 87%, net income 86%, market cap 90%. A second, separate timing error is kept as a diagnostic: with the signal regressed on the month whose prices it was built from, the Reversal Fama-MacBeth t-stat on today's members was -27.4.
 <!-- results:end -->

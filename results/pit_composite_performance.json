@@ -2,22 +2,22 @@
   "net": {
     "annualized_return": -0.0108196,
     "annualized_volatility": 0.0568762,
-    "sharpe_ratio": -0.190231,
+    "sharpe_ratio": -0.162809,
     "max_drawdown": -0.245165,
     "annual_turnover": 10.6468,
-    "deflated_sharpe_ratio": 3.53632e-06,
-    "dsr_p_value": 0.999996,
+    "deflated_sharpe_ratio": 0.0357512,
+    "dsr_p_value": 0.964249,
     "n_days": 2367.0,
     "n_years": 9.39286
   },
   "gross": {
     "annualized_return": -0.00553772,
     "annualized_volatility": 0.0568438,
-    "sharpe_ratio": -0.0974199,
+    "sharpe_ratio": -0.0692521,
     "max_drawdown": -0.241714,
     "annual_turnover": 10.6468,
-    "deflated_sharpe_ratio": 1.33366e-05,
-    "dsr_p_value": 0.999987,
+    "deflated_sharpe_ratio": 0.0650685,
+    "dsr_p_value": 0.934931,
     "n_days": 2367.0,
     "n_years": 9.39286
   }

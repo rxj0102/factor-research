@@ -63,7 +63,12 @@ def deflated_sharpe_ratio(
             (1 - np.euler_gamma) * norm.ppf(1 - 1.0 / n_trials)
             + np.euler_gamma * norm.ppf(1 - 1.0 / (n_trials * np.e))
         )
-        benchmark_sharpe = expected_max_z / np.sqrt(periods_per_year)
+        # Bailey and Lopez de Prado: SR0 = sqrt(V[SR_n]) * E[max Z]. With no estimate of the
+        # dispersion of the trials' Sharpe ratios, use its value under the null that every trial
+        # has zero skill: a per-period Sharpe estimated from T observations has variance 1 / T.
+        # (An earlier version divided by sqrt(periods_per_year), as if every trial had one year
+        # of data, which tripled the hurdle on a nine-year daily record.)
+        benchmark_sharpe = expected_max_z / np.sqrt(T)
 
     # Variance of estimated Sharpe (Eq. 5)
     var_sr = (1 / T) * (1 + 0.5 * sr_hat**2 - skew * sr_hat + (kurt / 4) * sr_hat**2)
